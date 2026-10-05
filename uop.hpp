@@ -3,79 +3,157 @@
 #define TENSOR_TIGER_UOP
 
 #include "utils.hpp"
-#include "arena.hpp"
+#include "alloc.hpp"
+#include "array.hpp"
+#include "set.hpp"
 
-constexpr u64 UOP_POOL_SIZE = 100;
-constexpr u64 UOP_MAX_NUM_SRCS = 3;
 
 enum class Ops {
+  NOOP,
   CONST,
   ADD
 };
 
-struct Arg {
+struct Args {
 
-  enum {
-    F32,
+  enum class Type {
+    NONE,
+    F32_LITERAL,
   } type;
 
   union {
-    f32 f;
+    f32 f32_literal;
   };
 
-  bool operator==(const Arg& other) {
+  bool operator==(const Args& other) {
     if (type != other.type) return false;
-
     switch (type) {
-      case F32: return f = other.f;
+      case Type::NONE:        return true;
+      case Type::F32_LITERAL: return f32_literal == other.f32_literal;
     }
+    return false;
   }
+
 };
 
-struct internal_UOp {
-  Ops op;
-  Arg arg;
-  internal_UOp *srcs[UOP_MAX_NUM_SRCS]; // in constructor, intialize to nullptr
 
-  bool operator==(const internal_UOp& other) {
-    for (u64 i = 0; i < UOP_MAX_NUM_SRCS; i++) {
-      if (srcs[i] != other.srcs[i]) return false;
+struct UOp_Cache {
+
+  static constexpr u64 Num_Sources = 2;
+  static constexpr u64 UOp_Pool_Size = 100;
+
+  using Sources = Array<u32, Num_Sources>;
+
+  struct _UOp {
+    Ops op;
+    Args args;
+    Sources srcs;
+
+    // TODO: this should be the default?
+    bool operator==(const _UOp& other) {
+      if (srcs.size != other.srcs.size) return false;
+      for (u32 i = 0; i < srcs.size; i++) {
+        if (srcs.at(i) != other.srcs.at(i)) return false;
+      }
+      return op == other.op && args == other.args;
     }
-    return op == other.op && arg == other.arg;
-  }
-};
+  };
 
-struct UOp_Pool {
-  UOp_Pool() :
-    allocator(UOP_POOL_SIZE * sizeof(internal_UOp)),
-    uops(reinterpret_cast<internal_UOp *>(allocator.backing_memory)),
-    capacity(UOP_POOL_SIZE),
-    num_uops(0) {}
+  Hash_Set<_UOp, UOp_Pool_Size> cache;
 
-  void clear() {
-    allocator.clear();
-    num_uops = 0;
-  }
+  UOp_Cache() : cache(Virtual_Memory_Manager::get_instance()) { clear(); }
 
-  i64 find_uop(const internal_UOp& uop) {
-    if (num_uops == 0) return -1;
-    for (i64 i = 0; i < num_uops; i++) {
-      if (uops[i] == uop) return i;
-    }
-    return -1;
-  }
-
-  // UOp new_uop(const Arg& args, const )
-
-  Arena_Allocator allocator;
-  internal_UOp *uops;
-  u64 capacity;
-  u64 num_uops;
+  void clear() { cache.clear(); }
+  u64 insert_uop(const _UOp& uop) { return cache.insert(uop); }
+  const _UOp& get_uop(u64 cache_index) { return cache.allocator.at(cache_index).v; }
 };
 
 struct UOp {
-  static UOp_Pool cache;
-  u64 cache_index;
+  u32 cache_index;
+  UOp_Cache *cache;
+
+  UOp() {
+    static UOp_Cache cache;
+    this->cache = &cache;
+  }
+
+  static const UOp_Cache::_UOp& find(u64 cache_index) {
+    return UOp().cache->get_uop(cache_index);
+  }
+
+  UOp(const UOp_Cache::_UOp& _uop) : UOp() {
+    this->cache_index = cache->insert_uop(_uop);
+  }
+
+  UOp(const u32 cache_index) : UOp() {
+    this->cache_index = cache_index;
+  }
+
+  UOp(const UOp& other) : UOp() {
+    this->cache_index = other.cache_index;
+  }
+
+  UOp(f32 f) : // When doing cast, add double first.
+    UOp(UOp_Cache::_UOp { Ops::CONST, Args { Args::Type::F32_LITERAL, f } }) {}
+
+  UOp operator+(const UOp& other) {
+    const UOp_Cache::Sources srcs = { this->cache_index, other.cache_index };
+    return UOp(UOp_Cache::_UOp { Ops::ADD, Args { Args::Type::NONE }, srcs });
+  }
+
+  bool operator!=(const UOp& other) const { return cache_index != other.cache_index; }
+  bool operator==(const UOp& other) const { return cache_index == other.cache_index; }
+
+  // bottom up greedy rewrite
+  // graph_rewrite -> do the constant folding.
+  // should return a single UOp for the week 1 stuff
+  // 1. toposort from given uop
+  // 2. constant fold.
+
+  // 1 uop for now.
+  // static UOp graph_rewrite(UOp uop) {
+    // this first. needs to match for things that aren't const too.
+    // add ( const (a), const (a) ) -> const (2a)
+    // add ( const (a), const (b) ) -> const (a + b)
+    // add (  )
+  // }
+
+  static void assert_same_uop(const UOp& a, const UOp& b) {
+    if (a != b) {
+      std::cerr << "Assertion error: " << a << " != " << b << "\n";
+
+      // TODO: something nicer than std::terminate.
+      std::terminate();
+    }
+  }
+
+  static void assert_different_uop(const UOp& a, const UOp& b) {
+    if (a == b) {
+      std::cerr << "Assertion error: " << a << " == " << b << "\n";
+      std::terminate();
+    }
+  }
+
+  friend std::ostream& operator<<(std::ostream& os, const UOp& uop) {
+    // TODO: needs to be redone, have a string_builder class
+    // takes in a block of memory, doesn't own it (temporary arena)
+    // shouldn't print out uop.cache_index, but some counter thing.
+    // should go through the graph
+    // have nice colors too :)
+    // should generate uir
+    const UOp_Cache::_UOp& _uop = UOp::find(uop.cache_index);
+    switch (_uop.op) {
+      case Ops::CONST: {
+        os << "Result: " << _uop.args.f32_literal;
+      } break;
+      case Ops::NOOP:
+      case Ops::ADD:
+        os << "Need to implement.";
+    }
+    return os;
+  }
+
 };
+
 
 #endif

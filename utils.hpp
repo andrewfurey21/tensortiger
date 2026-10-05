@@ -4,12 +4,21 @@
 
 #include <sys/mman.h>
 
+#include <cstring>
+#include <cassert>
+#include <algorithm>
+#include <iostream>
+#include <initializer_list>
 #include <new>
 
 using i32 = signed int;
-using f32 = float;
-using u64 = unsigned long long;
 using i64 = signed long long;
+
 using u8 = unsigned char;
+using u32 = unsigned int;
+using u64 = unsigned long long;
+
+using f32 = float;
+using f64 = double;
 
 #endif
