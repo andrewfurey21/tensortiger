@@ -81,7 +81,7 @@ struct Hash_Set {
   }
 
   void remove(const T& value) {
-    const u64 pool_index = find_empyt_slot_or_value(value);
+    const u64 pool_index = find_empty_slot_or_value(value);
 
     if (allocator.at(pool_index).state != _Slot::State::OCCUPIED)
       return;
@@ -92,7 +92,7 @@ struct Hash_Set {
   }
 
   u64 get_index(const T& value) {
-    const u64 pool_index = find_empyt_slot_or_value(value);
+    const u64 pool_index = find_empty_slot_or_value(value);
 
     if (allocator.at(pool_index).state != _Slot::State::OCCUPIED)
       std::terminate();
