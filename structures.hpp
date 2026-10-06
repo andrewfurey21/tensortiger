@@ -103,6 +103,11 @@ struct Hash_Set {
     return pool_index;
   }
 
+  T at(u64 index) {
+    assert(data[index].state == _Slot::State::OCCUPIED && "This is not a valid entry in the set");
+    return data[index].v;
+  }
+
   void clear() {
     if (data == nullptr) return;
 

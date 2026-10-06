@@ -60,7 +60,7 @@ struct UOp_Cache {
   UOp_Cache() : cache() { cache.insert(UOp {}); }
 
   u64 insert(const UOp& uop) { return cache.insert(uop); }
-  const UOp& get(u64 cache_index) { return cache.data[cache_index].v; }
+  const UOp get(u64 cache_index) { return cache.at(cache_index); }
 };
 
 struct UOp {
