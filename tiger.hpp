@@ -3,8 +3,7 @@
 
 #include "utils.hpp"
 #include "alloc.hpp"
-#include "array.hpp"
-#include "set.hpp"
+#include "structures.hpp"
 #include "uop.hpp"
 
 #endif

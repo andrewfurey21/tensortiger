@@ -49,107 +49,24 @@ constexpr u64 page_size_in_bytes(const Page_Size page_size) {
   };
 }
 
-struct Virtual_Memory_Manager {
+inline u8 *os_alloc(u64 num_bytes) {
+  u8 *buffer =
+    reinterpret_cast<u8 *>(mmap(nullptr,
+                                num_bytes,
+                                PROT_READ | PROT_WRITE,
+                                MAP_ANON | MAP_PRIVATE,
+                                0,
+                                0));
 
-  u8 *backing_memory;
-  u32 num_pages_reserved;
-  u32 page_size;
-  u32 num_pages_allocated;
+  if (buffer == MAP_FAILED) return nullptr;
+  return buffer;
+}
 
-  static void Allocate_Pages(u32 num_pages, Page_Size page_size = Page_Size::DEFAULT) {
-    (void) get_instance(num_pages, page_size_in_bytes(page_size));
-  }
-
-  static Virtual_Memory_Manager& get_instance(u32 num_pages = 0, u32 page_size = 0) {
-    static Virtual_Memory_Manager vmm(num_pages, page_size);
-    return vmm;
-  }
-
-  Virtual_Memory_Manager(const Virtual_Memory_Manager& other) = delete;
-  Virtual_Memory_Manager& operator=(const Virtual_Memory_Manager& other) = delete;
-
-  void *alloc_contiguous_pages(u32 num_bytes_to_allocate) {
-    const u32 num_pages_to_allocate = (num_bytes_to_allocate + page_size - 1) / page_size;
-    if (num_pages_allocated + num_pages_to_allocate >= num_pages_reserved) {
-      throw std::bad_alloc();
-    }
-
-    void *allocation = &backing_memory[num_pages_allocated * page_size];
-    num_pages_allocated += num_pages_to_allocate;
-    return allocation;
-  }
-
-  // No dealloc yet, bare bones.
-  void return_contiguous_pages(void *pages, u32 num_bytes_to_return) {}
-
-private:
-
-  Virtual_Memory_Manager() :
-    backing_memory(nullptr),
-    num_pages_reserved(0),
-    page_size(0),
-    num_pages_allocated(0) {}
-
-  Virtual_Memory_Manager(u32 num_pages, u32 page_size) {
-    this->backing_memory = os_alloc(num_pages * page_size);
-    if (backing_memory == nullptr) throw std::bad_alloc();
-
-    this->num_pages_reserved = num_pages;
-    this->page_size = page_size;
-    this->num_pages_allocated = 0;
-  }
-
-  ~Virtual_Memory_Manager() {
-    os_dealloc(backing_memory, page_size * num_pages_reserved);
-  }
-
-  u8 *os_alloc(u64 num_bytes) {
-    u8 *buffer =
-      reinterpret_cast<u8 *>(mmap(nullptr,
-                                  num_bytes,
-                                  PROT_READ | PROT_WRITE,
-                                  MAP_ANON | MAP_PRIVATE,
-                                  0,
-                                  0));
-
-    if (buffer == MAP_FAILED) return nullptr;
-    return buffer;
-  }
-
-  i32 os_dealloc(void *addr, u64 len) {
-    if (addr == nullptr) return 0;
-    // TODO: Should add a warning here maybe, when would munmap fail?
-    return munmap(addr, len);
-  }
-};
-
-template <typename T, u64 Capacity>
-struct Arena_Allocator {
-  Arena_Allocator(Virtual_Memory_Manager& vmm) :
-    vmm(vmm),
-    memory((T *)vmm.alloc_contiguous_pages(sizeof(T) * Capacity)),
-    num_elements_allocated(0) {}
-
-  T *alloc(u64 num_elements_to_allocate = 1) {
-    if (num_elements_allocated + num_elements_to_allocate > Capacity)
-      throw std::bad_alloc();
-
-    T *allocation = memory + num_elements_allocated;
-    num_elements_allocated += num_elements_to_allocate;
-    return allocation;
-  }
-
-  void dealloc(T *element, u64 num_elements_to_deallocate) {}
-
-  T& at(u64 index) {
-    if (index > num_elements_allocated) std::terminate();
-    return memory[index];
-  }
-
-  Virtual_Memory_Manager& vmm;
-  T *memory;
-  u64 num_elements_allocated;
-};
+inline i32 os_dealloc(void *addr, u64 len) {
+  if (addr == nullptr) return 0;
+  // TODO: Should add a warning here maybe, when would munmap fail?
+  return munmap(addr, len);
+}
 
 template <typename T, u64 Capacity>
 struct Pool_Allocator {
@@ -159,14 +76,9 @@ struct Pool_Allocator {
       T element;
     };
 
-    Pool_Allocator(Virtual_Memory_Manager& vmm) : vmm(vmm) {
-      memory = vmm.alloc_contiguous_pages(Capacity * sizeof(Chunk));
+    Pool_Allocator() {
       next_free = 0;
       clear();
-    }
-
-    ~Pool_Allocator() {
-      vmm.return_contiguous_pages((void *)memory, Capacity * sizeof(Chunk));
     }
 
     T *alloc() {
@@ -197,11 +109,8 @@ struct Pool_Allocator {
       memory[i].next_free = -1;
     }
 
-    // TODO: should have an at(i) function.
-
-    Virtual_Memory_Manager& vmm;
-    Chunk *memory;
     i32 next_free;
+    Chunk memory[Capacity];
 };
 
 #endif

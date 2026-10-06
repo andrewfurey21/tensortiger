@@ -1,5 +1,15 @@
 # tensortiger
 
+
+goal: implement a tinygrad uir compiler that compiles to ptx on my 3080.
+
+maybe tileir first though.
+
+## design choices
+
+- use c++20
+- the compiler doesn't make any heap allocs.
+
 ## links
 
 * [All cuda docs](https://docs.nvidia.com/cuda/cuda-programming-guide/index.html)

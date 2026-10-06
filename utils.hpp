@@ -21,4 +21,12 @@ using u64 = unsigned long long;
 using f32 = float;
 using f64 = double;
 
+
+inline void panic_if(bool expr, const char *msg) {
+  if (expr) {
+    std::cout << msg << "\n";
+    std::terminate();
+  }
+}
+
 #endif
