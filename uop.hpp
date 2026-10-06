@@ -30,13 +30,22 @@ struct Args {
     }
     return false;
   }
+
+  template <typename T>
+  static Args from_const(const T& value) {
+    if constexpr (std::is_same_v<T, f32>) {
+      return Args { Args::Type::F32, value };
+    } else {
+      static_assert(false, "Unsupported Args type.");
+    }
+  }
 };
 
 using Sources = Array<u32, 3>;
 
 struct UOp_Cache {
 
-  static constexpr u64 UOp_Cache_Size = 100;
+  static constexpr u64 Size = 100;
 
   struct UOp {
     Ops op;
@@ -46,7 +55,9 @@ struct UOp_Cache {
     bool operator==(const UOp& other) const = default;
   };
 
-  Hash_Set<UOp, UOp_Cache_Size> cache;
+  Hash_Set<UOp, Size> cache;
+
+  UOp_Cache() : cache() { cache.insert(UOp {}); }
 
   u64 insert(const UOp& uop) { return cache.insert(uop); }
   const UOp& get(u64 cache_index) { return cache.data[cache_index].v; }
@@ -54,6 +65,7 @@ struct UOp_Cache {
 
 struct UOp {
 
+  // The UOp is just a fancy wrapper around an index into the uop cache.
   u32 cache_index;
 
   inline static UOp_Cache cache;
@@ -63,11 +75,13 @@ struct UOp {
     return cache.insert(uop);
   }
 
+  UOp() : cache_index(0) {}
+
   UOp(u32 cache_index) : cache_index(cache_index) {}
 
   UOp(f32 f) {
     const Ops op       { Ops::CONST };
-    const Args args    { Args::Type::F32, f };
+    const Args args    { Args::from_const(f) };
     const Sources srcs { };
 
     this->cache_index = new_uop(op, args, srcs);
@@ -83,5 +97,25 @@ struct UOp {
 
 };
 
+inline const UOp graph_rewrite(const UOp& sink) {
+
+  Queue<UOp, UOp_Cache::Size> uops;
+  uops.push(sink);
+
+  // Original UOp -> rewritten UOp.
+  Hash_Map<UOp, UOp, UOp_Cache::Size> rewritten_uops;
+
+
+  // Add the children, and rewrite them first.
+  // Rewrite current node and put that in rewritten uops.
+  // When looking at sources, must get the source uop from the rewritten uops hash map.
+
+  // Q1: how to do this iteratively
+  // Q2: how to do the pattern matching
+
+  while (uops.size() > 0) {}
+
+  return rewritten_uops.at(sink);
+}
 
 #endif

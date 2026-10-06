@@ -128,7 +128,7 @@ struct Hash_Map {
     }
   }
 
-  _Slot data[Capacity]; // Not owning.
+  _Slot data[Capacity];
   u64 size;
 
   u64 hash(const Key& key) { return fnv_1a_hash(key) % Capacity; }
@@ -190,6 +190,11 @@ struct Hash_Map {
     return pool_index;
   }
 
+  const Value at(const Key& key) {
+    assert(!conatins(key) && "Hash_Map does not contain the key.");
+    return data[get_index(key)];
+  }
+
   void clear() {
     for (u64 i = 0; i < Capacity; i++) {
       data[i].~_Slot();
@@ -200,12 +205,14 @@ struct Hash_Map {
 
 template <typename T, u64 Capacity>
 struct Array {
-  Array() : size(0) {
-    memset(data, 0, Capacity * sizeof(T));
-  }
+
+  u64 size;
+  T data[Capacity];
+
+  Array() : data(), size(0) {}
 
   // are these heap allocated?
-  Array(std::initializer_list<T> list) : size(list.size()) {
+  Array(std::initializer_list<T> list) : data(), size(list.size()) {
     if (list.size() > Capacity) std::terminate();
     std::copy(list.begin(), list.end(), data);
  }
@@ -229,9 +236,65 @@ struct Array {
     }
     return true;
   }
+};
 
-  u64 size;
+template <typename T, u64 Capacity>
+struct Queue {
+
   T data[Capacity];
+  u64 start;
+  u64 end;
+
+  Queue() : data(), start(0), end(0) {}
+
+  void push(const T& value) {
+    assert(size() < Capacity && "Cannot push onto full queue.");
+
+    data[end] = value;
+    end = inc(end);
+  }
+
+  T pop() {
+    assert(size() > 0 && "Cannot pop on empty queue.");
+
+    T top = data[start];
+    data[start].~T();
+    start = inc(start);
+    return top;
+  }
+
+  u64 inc(u64 index) {
+    index++;
+    if (index >= Capacity) index = 0;
+    return index;
+  }
+
+  u64 size() {
+    if (start > end) {
+      return Capacity - (start - end);
+    } else {
+      return end - start;
+    }
+  }
+
+  bool in_range(u64 index) {
+    if (index >= Capacity) return false;
+
+    if (start > end) {
+      return index >= end && index < start;
+    }
+
+    return true;
+  }
+
+  const T& operator[](u64 index) const = delete;
+
+  const T& at(u64 index) const {
+    assert(in_range(index) && "Index out of bounds when accessing queue.");
+
+    return data[index];
+  }
+
 };
 
 #endif
