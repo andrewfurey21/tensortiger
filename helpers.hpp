@@ -103,9 +103,9 @@ struct Hash_Set {
     return pool_index;
   }
 
-  T at(u64 index) {
+  T& at(u64 index) {
     // TODO: panic_if(expr, f string, var args)
-    // maybe use c++23 std::stacktrace or linux backtrace
+    // maybe look at c++23 std::stacktrace or linux backtrace
     assert(data[index].state == _Slot::State::OCCUPIED &&
            "This is not a valid entry in the set");
     return data[index].v;

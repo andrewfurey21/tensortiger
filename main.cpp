@@ -16,6 +16,12 @@ int main() {
   // UOp::assert_different_uop(c, b);
 
   UOp d = walk_rewrite(c, {});
+
+
+  Pattern_Matcher grad = {
+    UPat {1}, UPat{2},
+  };
+
   // UOp::assert_different_uop(c, d);
   // UOp::assert_different_uop(a, d);
   // UOp::assert_different_uop(b, d);
