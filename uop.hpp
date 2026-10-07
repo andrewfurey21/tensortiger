@@ -3,7 +3,7 @@
 #define TENSOR_TIGER_UOP
 
 #include "utils.hpp"
-#include "structures.hpp"
+#include "helpers.hpp"
 
 enum class Ops {
   NOOP,
@@ -36,7 +36,7 @@ struct Args {
     if constexpr (std::is_same_v<T, f32>) {
       return Args { Args::Type::F32, value };
     } else {
-      static_assert(false, "Unsupported Args type.");
+      static_assert(false, "Unsupported Args const type.");
     }
   }
 };
@@ -70,52 +70,76 @@ struct UOp {
 
   inline static UOp_Cache cache;
 
-  static u32 new_uop(const Ops& op, const Args& args, const Sources& srcs) {
+  static u32 new_uop(const Ops& op = Ops::NOOP, const Args& args = {}, const Sources& srcs = {}) {
     const UOp_Cache::UOp uop { op, args, srcs };
     return cache.insert(uop);
   }
 
   UOp() : cache_index(0) {}
 
+  UOp(const UOp& other) : cache_index(other.cache_index) {}
+
   UOp(u32 cache_index) : cache_index(cache_index) {}
 
   UOp(f32 f) {
-    const Ops op       { Ops::CONST };
-    const Args args    { Args::from_const(f) };
-    const Sources srcs { };
+    const Ops op    { Ops::CONST };
+    const Args args { Args::from_const(f) };
 
-    this->cache_index = new_uop(op, args, srcs);
+    this->cache_index = new_uop(op, args);
   }
 
   UOp operator+(const UOp& other) {
     const Ops op       { Ops::ADD };
-    const Args args    { };
     const Sources srcs { this->cache_index, other.cache_index };
 
-    return UOp(new_uop(op, args, srcs));
+    return UOp(new_uop(op, {}, srcs));
   }
 
+  bool operator==(const UOp& other) const = default;
 };
 
-inline const UOp graph_rewrite(const UOp& sink) {
+struct Pattern_Matcher {
 
-  Queue<UOp, UOp_Cache::Size> uops;
-  uops.push(sink);
+  // Loop through each pattern, check for a match, apply pattern.
+  // Create a new uop from applying that pattern. Srcs should be maintained if necessary
+  // or not used if e.g. const folded.
+  // If no patterns can be applied, just return the same uop.
+  const UOp rewrite(const UOp& uop) const {
+    return UOp { uop };
+  }
+};
 
-  // Original UOp -> rewritten UOp.
+// needs to take some pattern matching thing with a uop rewrite function.
+inline const UOp walk_rewrite(const UOp& sink, const Pattern_Matcher& pm) {
+
+  #define UOP(uop) (UOp::cache.cache.at(uop.cache_index))
+
+  using Stack = Array<UOp, UOp_Cache::Size>;
+  Stack explored   = { };
+  Stack unexplored = { sink };
+
   Hash_Map<UOp, UOp, UOp_Cache::Size> rewritten_uops;
 
+  while (unexplored.size > 0) {
+    const UOp uop = unexplored.pop();
+    explored.push(uop);
 
-  // Add the children, and rewrite them first.
-  // Rewrite current node and put that in rewritten uops.
-  // When looking at sources, must get the source uop from the rewritten uops hash map.
+    // Don't rewrite the same uop twice.
+    if (rewritten_uops.contains(uop)) { continue; }
+    rewritten_uops.insert(uop, uop);
 
-  // Q1: how to do this iteratively
-  // Q2: how to do the pattern matching
+    const Sources& srcs = UOP(uop).srcs;
+    for (u32 i = 0; i < srcs.size; i++) {
+      unexplored.push(srcs.at(i));
+    }
+  }
 
-  while (uops.size() > 0) {}
+  while (explored.size > 1) {
+    const UOp uop = explored.pop();
+    rewritten_uops.insert(uop, pm.rewrite(uop));
+  }
 
-  return rewritten_uops.at(sink);
+  return pm.rewrite(sink);
 }
 
 #endif

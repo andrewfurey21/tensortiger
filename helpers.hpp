@@ -1,6 +1,6 @@
 
-#ifndef TENSOR_TIGER_STRUCTURES
-#define TENSOR_TIGER_STRUCTURES
+#ifndef TENSOR_TIGER_HELPERS
+#define TENSOR_TIGER_HELPERS
 
 #include "utils.hpp"
 
@@ -31,7 +31,7 @@ struct Hash_Set {
   // Just want to see a warning.
   static_assert(sizeof(_Slot) < 64);
 
-  Hash_Set() : data{}, size{} {}
+  Hash_Set() : size{}, data{} {}
 
   Hash_Set(void *memory) : data((_Slot *)memory), size(0) {
     for (u64 i = 0; i < Capacity; i++) {
@@ -39,8 +39,8 @@ struct Hash_Set {
     }
   }
 
-  _Slot data[Capacity];
   u64 size;
+  _Slot data[Capacity];
 
   u64 hash(const T& t) { return fnv_1a_hash(t) % Capacity; }
 
@@ -104,7 +104,10 @@ struct Hash_Set {
   }
 
   T at(u64 index) {
-    assert(data[index].state == _Slot::State::OCCUPIED && "This is not a valid entry in the set");
+    // TODO: panic_if(expr, f string, var args)
+    // maybe use c++23 std::stacktrace or linux backtrace
+    assert(data[index].state == _Slot::State::OCCUPIED &&
+           "This is not a valid entry in the set");
     return data[index].v;
   }
 
@@ -127,17 +130,19 @@ struct Hash_Map {
     Value v {};
   };
 
-  Hash_Map() : data{}, size{} {
+  Hash_Map() : size{}, data{} {
     for (u64 i = 0; i < Capacity; i++) {
       new (data + i) _Slot;
     }
   }
 
-  _Slot data[Capacity];
   u64 size;
+  _Slot data[Capacity];
 
   u64 hash(const Key& key) { return fnv_1a_hash(key) % Capacity; }
 
+  // i wonder is there a nicer way to do this without mod
+  // since index will never be greater than Capacity.
   u64 next_index(u64 index) { return (index + 1) % Capacity; }
 
   // Returns the index of the value, or an empty slot.
@@ -147,17 +152,18 @@ struct Hash_Map {
 
     while (data[pool_index].state == _Slot::State::OCCUPIED) {
 
-      if (data[pool_index] == key) return pool_index;
+      if (data[pool_index].k == key) return pool_index;
 
       pool_index = next_index(pool_index);
-      assert(pool_index != original_hash && "Looping when finding empty slot in set.");
+      assert(pool_index != original_hash &&
+             "Looping when finding empty slot in set.");
     }
     return pool_index;
   }
 
   bool contains(const Key& key) {
     u64 empty_slot_or_value_index = find_empty_slot_or_value(key);
-    return data[empty_slot_or_value_index] == _Slot::State::OCCUPIED;
+    return data[empty_slot_or_value_index].state == _Slot::State::OCCUPIED;
   }
 
   u64 insert(const Key& key, const Value& value) {
@@ -195,9 +201,9 @@ struct Hash_Map {
     return pool_index;
   }
 
-  const Value at(const Key& key) {
-    assert(!conatins(key) && "Hash_Map does not contain the key.");
-    return data[get_index(key)];
+  Value at(const Key& key) {
+    assert(!contains(key) && "Hash_Map does not contain the key.");
+    return data[get_index(key)].v;
   }
 
   void clear() {
@@ -227,6 +233,19 @@ struct Array {
     data[size++] = t;
   }
 
+  const T& top() {
+    assert(size != 0 && "Cannot get top from empty array.");
+    return data[size - 1];
+  }
+
+  T pop() {
+    assert(size != 0 && "Cannot pop from empty array.");
+    size--;
+    T v = std::move(data[size]);
+    data[size].~T();
+    return v;
+  }
+
   const T& operator[](u64 index) const = delete;
 
   const T& at(u64 index) const {
@@ -234,7 +253,7 @@ struct Array {
     return data[index];
   }
 
-  bool operator==(const Array<T, Capacity>& other) const {
+  bool operator==(const Array& other) const {
     if (size != other.size) return false;
     for (u32 i = 0; i < size; i++) {
       if (this->at(i) != other.at(i)) return false;
@@ -246,11 +265,11 @@ struct Array {
 template <typename T, u64 Capacity>
 struct Queue {
 
-  T data[Capacity];
   u64 start;
   u64 end;
+  T data[Capacity];
 
-  Queue() : data(), start(0), end(0) {}
+  Queue() : start(0), end(0), data() {}
 
   void push(const T& value) {
     assert(size() < Capacity && "Cannot push onto full queue.");
@@ -296,7 +315,6 @@ struct Queue {
 
   const T& at(u64 index) const {
     assert(in_range(index) && "Index out of bounds when accessing queue.");
-
     return data[index];
   }
 
