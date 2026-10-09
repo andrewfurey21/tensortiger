@@ -8,8 +8,10 @@
 #include <cassert>
 #include <algorithm>
 #include <iostream>
+#include <iomanip>
 #include <initializer_list>
 #include <new>
+#include <functional>
 
 using i32 = signed int;
 using i64 = signed long long;

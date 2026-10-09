@@ -8,9 +8,12 @@ constexpr u64 DEFAULT_FNV_PRIME = 0x00000100000001B3;
 constexpr u64 DEFAULT_FNV_OFFSET = 0xCBF29CE484222325;
 
 template <typename T>
+// TODO: how does stdlib deal with this.
+// how to hash floats?? ok this doesn't work :')
 u64 fnv_1a_hash(const T& t) {
   const u8 *data = reinterpret_cast<const u8 *>(&t);
   u64 size = sizeof(T);
+  static_assert(sizeof(T) == 4);
 
   u64 hash = DEFAULT_FNV_OFFSET;
   for (u64 i = 0; i < size; i++) {
@@ -26,12 +29,12 @@ struct Hash_Set {
 
   struct _Slot {
     enum class State { _, EMPTY, OCCUPIED, DELETED, } state = State::EMPTY;
-    T v {};
+    T v;
   };
   // Just want to see a warning.
   static_assert(sizeof(_Slot) < 64);
 
-  Hash_Set() : size{}, data{} {}
+  Hash_Set() : size{}, data() {}
 
   Hash_Set(void *memory) : data((_Slot *)memory), size(0) {
     for (u64 i = 0; i < Capacity; i++) {
@@ -174,7 +177,7 @@ struct Hash_Map {
     if (data[pool_index].state == _Slot::State::OCCUPIED)
       return pool_index;
 
-    new (data + pool_index) _Slot { _Slot::State::OCCUPIED, key, value };
+    new (data + pool_index) _Slot ( _Slot::State::OCCUPIED, key, value );
     size++;
 
     return pool_index;
@@ -209,7 +212,7 @@ struct Hash_Map {
   void clear() {
     for (u64 i = 0; i < Capacity; i++) {
       data[i].~_Slot();
-      new (data + i) _Slot {};
+      new (data + i) _Slot();
     }
   }
 };
@@ -220,10 +223,13 @@ struct Array {
   u64 size;
   T data[Capacity];
 
-  Array() : data(), size(0) {}
+  Array() : data({}), size(0) {
+    memset(data, 0, Capacity * sizeof(T));
+  }
 
   // are these heap allocated?
   Array(std::initializer_list<T> list) : data(), size(list.size()) {
+    memset(data, 0, Capacity * sizeof(T));
     if (list.size() > Capacity) std::terminate();
     std::copy(list.begin(), list.end(), data);
  }
