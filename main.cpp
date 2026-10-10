@@ -13,8 +13,8 @@ inline static const Patterns basics = {
     [](UOp uop) {
       f32 first = UOp::cache.get((UOP(uop).srcs.at(0))).args.data.const_f32;
       f32 second = UOp::cache.get((UOP(uop).srcs.at(1))).args.data.const_f32;
-      // TODO: for some reason, this will not see the matching UOp in the cache.
-      std::cout << "Output op\n";
+
+      // need something better, maybe another Args constructor.
       return UOp(Ops::CONST, Args(first + second), {});
     },
   },
@@ -22,25 +22,35 @@ inline static const Patterns basics = {
 
 int main() {
 
-  const UOp a = 1.0f;
-  const UOp b = 0.0f;
-  const UOp e = 1.0f;
-  const UOp f = -1.0f;
-  UOp g = 1.0f;
+  UOp a = 1.0f;
+  UOp b = 2.0f;
+  UOp c = 3.0f;
+  UOp d = 4.0f;
+  UOp e = 5.0f;
+  UOp f = 6.0f;
+  UOp g = 7.0f;
+  UOp h = 8.0f;
+  // TODO: asserts for hash cons
 
-  UOp c = a + b + f + g;
-  // // TODO: asserts for hash cons
+  UOp a1 = a + b + c; // 1 + 2 + 3 = 6
+  UOp a2 = d + e; // 4 + 5 = 9
+  UOp a3 = a2 + f; // 9 + 6 = 15
+  UOp a4 = a1 + a2; // 6 + 9 = 15
+  UOp a5 = a3 + g + a4 + h; // 15 + 7 + 15 + 8 = 45
+
+  UOp before = a1 + a2 + a3 + a4 + a5; // 6 + 9 + 15 + 15 + 45 = 90
+  UOp expected = 90.0f;
 
   std::cout << "=== old graph ===\n";
-  debug_graph(c);
-  UOp d = walk_rewrite(c, basics);
+  debug_graph(before);
+  UOp after = walk_rewrite(before, basics);
 
   std::cout << "=== new graph ===\n";
-  debug_graph(d);
+  debug_graph(after);
 
   std::cout << "=== after rewrite ===\n";
 
-  std::cout << "Actual: " << d << "\n";
-  std::cout << "Expected: " << e << "\n";
+  std::cout << "Actual: " << after << "\n";
+  std::cout << "Expected: " << expected << "\n";
   return 0;
 }

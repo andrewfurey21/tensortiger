@@ -1,10 +1,13 @@
 # tensortiger
 
-goal: implement a tinygrad uir compiler that compiles to ptx on my 3080.
-
-maybe tileir first though.
+idea: implement a tinygrad uir compiler that compiles to cuda/tileir/ptx on my 3080.
 
 - use c++20
+
+## history
+
+- [ ] left a lot of todos. fix the current example, then go through each todo and redesign the system.
+- [x] basic const folding of addition.
 
 ## links
 
@@ -20,6 +23,7 @@ maybe tileir first though.
 * [ThunderKittens](https://hamzaelshafie.bearblog.dev/dissecting-thunderkittens-anatomy-of-a-compact-dsl-for-high-performance-ai-kernels/)
 * [Romou](https://www.microsoft.com/en-us/research/wp-content/uploads/2022/02/mobigpu_mobicom22_camera.pdf)
 * [Egg](https://egraphs-good.github.io/)
+* [microegg](https://github.com/mwillsey/microegg)
 * [MLIR](https://github.com/llvm/llvm-project/tree/main/mlir)
 * [LoopStack](https://arxiv.org/abs/2205.00618)
 * [TileLang](https://github.com/tile-ai/tilelang)

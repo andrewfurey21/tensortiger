@@ -142,14 +142,14 @@ struct Hash_Map {
   u64 size;
   _Slot data[Capacity];
 
-  u64 hash(const Key& key) { return fnv_1a_hash(key) % Capacity; }
+  u64 hash(const Key& key) const { return fnv_1a_hash(key) % Capacity; }
 
   // i wonder is there a nicer way to do this without mod
   // since index will never be greater than Capacity.
-  u64 next_index(u64 index) { return (index + 1) % Capacity; }
+  u64 next_index(u64 index) const { return (index + 1) % Capacity; }
 
   // Returns the index of the value, or an empty slot.
-  u64 find_empty_slot_or_value(const Key& key) {
+  u64 find_empty_slot_or_value(const Key& key) const {
     const u64 original_hash = hash(key);
     u64 pool_index = original_hash;
 
@@ -164,7 +164,7 @@ struct Hash_Map {
     return pool_index;
   }
 
-  bool contains(const Key& key) {
+  bool contains(const Key& key) const {
     u64 empty_slot_or_value_index = find_empty_slot_or_value(key);
     return data[empty_slot_or_value_index].state == _Slot::State::OCCUPIED;
   }
@@ -174,11 +174,13 @@ struct Hash_Map {
 
     const u64 pool_index = find_empty_slot_or_value(key);
 
-    if (data[pool_index].state == _Slot::State::OCCUPIED)
-      return pool_index;
+    if (data[pool_index].state == _Slot::State::OCCUPIED) {
+      data[pool_index].~_Slot();
+    } else {
+      size++;
+    }
 
     new (data + pool_index) _Slot ( _Slot::State::OCCUPIED, key, value );
-    size++;
 
     return pool_index;
   }
@@ -195,7 +197,7 @@ struct Hash_Map {
     size--;
   }
 
-  u64 get_index(const Key& key) {
+  u64 get_index(const Key& key) const {
     const u64 pool_index = find_empty_slot_or_value(key);
 
     if (data[pool_index].state != _Slot::State::OCCUPIED)
@@ -204,8 +206,8 @@ struct Hash_Map {
     return pool_index;
   }
 
-  Value at(const Key& key) {
-    assert(!contains(key) && "Hash_Map does not contain the key.");
+  Value at(const Key& key) const {
+    assert(contains(key) && "Hash_Map does not contain the key.");
     return data[get_index(key)].v;
   }
 

@@ -71,6 +71,7 @@ inline std::ostream& operator<<(std::ostream& os, const Args& args) {
   return os;
 }
 
+// TODO: this is bad, because it should be an array of UOp, not u32.
 using Sources = Array<u32, 3>;
 
 inline std::ostream& operator<<(std::ostream& os, const Sources& srcs) {
@@ -178,6 +179,8 @@ struct UOp {
     this->cache_index = new_uop(op, args);
   }
 
+  // TODO: before adding more, understand mixins in c++ (crtp?) and how
+  // tg uses them.
   UOp operator+(const UOp& other) const {
     const Ops op       { Ops::ADD };
     const Sources srcs { this->cache_index, other.cache_index };
@@ -195,6 +198,21 @@ struct UOp {
 
 using Rewrite_Context = Hash_Map<UOp, UOp, UOp_Cache::Size>;
 
+inline UOp fix_srcs(const Rewrite_Context& ctx, const UOp& uop) {
+  const UOp_Cache::UOp& _uop = UOP(uop);
+
+  Sources srcs;
+  for (u32 i = 0; i < _uop.srcs.size; i++) {
+    // const UOp_Cache::UOp& src_uop = UOp::cache.get(_uop.srcs.at(i));
+
+    const UOp src_uop = _uop.srcs.at(i);
+
+    srcs.push(ctx.at(src_uop).cache_index);
+  }
+  return UOp::new_uop(_uop.op, _uop.args, srcs);
+}
+
+// TODO: this shouldn't exist, it should just be UPat
 struct Pattern {
   Ops op;
   Args args;
@@ -209,45 +227,51 @@ struct Pattern {
 
 
 // Q: how to do cvar vs const
+// TODO: UPat is very similar to UOp. how to differentiate when doing match is the main question.
 struct UPat {
 
   // TODO: need to be able to do the same ops you can do on a UOp
-  // that's why they do the mixin shit.
+  // i should have some opmixin in here, that uop also inherits.
+  // TODO: currently only goes one level deep. should be arbitrary
   Pattern pat;
   Array<Pattern, 3> srcs;
 
   UPat(Ops op = Ops::NOOP, Args args = Args(), const Array<Pattern, 3> srcs = {}) : pat(op, args), srcs(srcs) {}
 
-  // TODO: currently only goes one level deep.
-  bool match(const UOp& uop) const {
-    if (!pat.match(uop)) return false;
+  bool match(const UOp& uop, Rewrite_Context& ctx) const {
+    const UOp& _uop = ctx.at(uop);
 
-    const UOp_Cache::UOp& _uop = UOP(uop);
-    if (srcs.size != _uop.srcs.size) return false;
+    if (!pat.match(_uop)) return false;
+
+    const UOp_Cache::UOp& __uop = UOP(_uop);
+    if (srcs.size != __uop.srcs.size) return false;
 
     for (u32 i = 0; i < srcs.size; i++) {
-      if (!srcs.at(i).match(_uop.srcs.at(i))) return false;
+      if (!srcs.at(i).match(ctx.at(__uop.srcs.at(i)))) return false;
     }
     return true;
   }
 };
 
-using Patterns = Array<std::pair<UPat, std::function<UOp(UOp)>>, 10>;
+using Patterns = Array<std::pair<UPat, std::function<UOp(const UOp&)>>, 10>;
 
 inline const UOp rewrite(const UOp& uop, Rewrite_Context& ctx, const Patterns& patterns) {
 
   UOp current = uop;
 
-  for (u32 i = 0; i < patterns.size; i++) {
-    if (patterns.at(i).first.match(uop)) {
-      current = patterns.at(i).second(current);
-      i = 0; // TODO: need to better understand the pdict/caching stuff
-    }
+  for (u32 i = 0; i < patterns.size;) {
+    if (patterns.at(i).first.match(current, ctx)) {
+      // TODO: when does tg fix srcs
+      current = patterns.at(i).second(fix_srcs(ctx, current));
+      continue; // TODO: need to better understand the pdict/caching stuff
+    };
+    i++;
   }
 
   return current;
 }
 
+// Should merge with walk.
 inline void debug_graph(const UOp& sink) {
   using Stack = Array<UOp, UOp_Cache::Size>;
   Stack explored   = { };
